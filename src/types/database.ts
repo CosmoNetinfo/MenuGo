@@ -209,6 +209,35 @@ export interface Database {
           updated_at?: string;
         };
       };
+      zone_consegna: {
+        Row: {
+          id: string;
+          locale_id: string;
+          nome: string;
+          costo: number; // centesimi
+          attiva: boolean;
+          ordine: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          locale_id: string;
+          nome: string;
+          costo?: number;
+          attiva?: boolean;
+          ordine?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          locale_id?: string;
+          nome?: string;
+          costo?: number;
+          attiva?: boolean;
+          ordine?: number;
+          created_at?: string;
+        };
+      };
       destinazioni: {
         Row: {
           id: string;
@@ -553,11 +582,13 @@ export interface Database {
           destinazione_snapshot: Json | null;
           data_consegna: string;
           fascia_oraria: string;
+          indirizzo_consegna: string | null;
           nome_cliente: string;
           cognome_cliente: string;
           telefono_cliente: string;
           note_cliente: string | null;
           totale: number; // centesimi
+          costo_consegna: number; // centesimi
           commissione_pagamento: number; // centesimi
           stripe_payment_intent_id: string | null;
           anonimizzato: boolean;
@@ -575,11 +606,13 @@ export interface Database {
           destinazione_snapshot?: Json | null;
           data_consegna: string;
           fascia_oraria: string;
+          indirizzo_consegna?: string | null;
           nome_cliente: string;
           cognome_cliente: string;
           telefono_cliente: string;
           note_cliente?: string | null;
           totale: number;
+          costo_consegna?: number;
           commissione_pagamento?: number;
           stripe_payment_intent_id?: string | null;
           anonimizzato?: boolean;
@@ -597,11 +630,13 @@ export interface Database {
           destinazione_snapshot?: Json | null;
           data_consegna?: string;
           fascia_oraria?: string;
+          indirizzo_consegna?: string | null;
           nome_cliente?: string;
           cognome_cliente?: string;
           telefono_cliente?: string;
           note_cliente?: string | null;
           totale?: number;
+          costo_consegna?: number;
           commissione_pagamento?: number;
           stripe_payment_intent_id?: string | null;
           anonimizzato?: boolean;

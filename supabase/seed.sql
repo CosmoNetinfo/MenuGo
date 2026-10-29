@@ -1,10 +1,10 @@
 -- ==============================================================================
--- MIGRAZIONE 4: SEED DATI DEMO PER IL LOCALE "TRATTORIA DEMO"
+-- MENUGO: SEED DATI DEMO PER IL LOCALE "TRATTORIA DEMO"
 -- ==============================================================================
 -- Autore: Daniele Spalletti, Cosmonet.info
 -- Progetto: MenuGo
 -- Solo dati fittizi conformi alle regole di privacy e portfolio.
--- Importi sempre in centesimi (integer).
+-- Importi sempre in centesimi (integer >= 0).
 -- ==============================================================================
 
 DO $$
@@ -19,6 +19,8 @@ DECLARE
 
     v_dest_alfa UUID := 'e0000000-0000-0000-0000-000000000001';
     v_dest_beta UUID := 'e0000000-0000-0000-0000-000000000002';
+
+    v_zona_centro UUID := 'z0000000-0000-0000-0000-000000000001';
 
     v_prod_tagliatelle UUID := 'p0000000-0000-0000-0000-000000000005';
     v_grp_formato UUID := 'g0000000-0000-0000-0000-000000000001';
@@ -39,8 +41,8 @@ BEGIN
         'Trattoria Demo',
         'Cucina tradizionale italiana e piatti freschi del giorno',
         'Benvenuti alla Trattoria Demo! Ordina comodamente online e ricevi il tuo pranzo direttamente in sede o ritiralo caldo.',
-        '/demo/placeholder-logo.svg',
-        '/demo/placeholder-cover.jpg',
+        '/demo/placeholder-logo.png',
+        '/demo/placeholder-cover.webp',
         '#059669', -- emerald-600
         '#ea580c', -- orange-600
         '#ffffff'
@@ -63,25 +65,30 @@ BEGIN
     )
     ON CONFLICT (locale_id) DO UPDATE SET modalita = EXCLUDED.modalita;
 
-    -- 4. Destinazioni (2 punti di consegna)
+    -- 4. Zone consegna a domicilio
+    INSERT INTO zone_consegna (id, locale_id, nome, costo, attiva, ordine)
+    VALUES (v_zona_centro, v_locale_id, 'Centro e zone limitrofe', 250, true, 1) -- 2,50 €
+    ON CONFLICT (id) DO NOTHING;
+
+    -- 5. Destinazioni programmate (2 punti di consegna aziendale)
     INSERT INTO destinazioni (id, locale_id, nome, indirizzo, attiva, ordine)
     VALUES 
         (v_dest_alfa, v_locale_id, 'Sede Aziendale Nexus Tech', 'Via dell''Innovazione 12, Edificio B', true, 1),
         (v_dest_beta, v_locale_id, 'Polo Direzionale Galileo', 'Corso Europa 45, Reception Centrale', true, 2)
     ON CONFLICT (id) DO NOTHING;
 
-    -- 5. Fasce orarie (3 per ciascuna destinazione)
-    INSERT INTO fasce_orarie (destinazione_id, locale_id, ora_inizio, ora_fine, giorni_settimana, attiva)
+    -- 6. Fasce orarie (3 per ciascuna destinazione)
+    INSERT INTO fasce_orarie (id, locale_id, destinazione_id, ora_inizio, ora_fine, giorni_settimana, attiva)
     VALUES
-        (v_dest_alfa, v_locale_id, '12:00:00', '12:30:00', '{1,2,3,4,5}', true),
-        (v_dest_alfa, v_locale_id, '12:30:00', '13:00:00', '{1,2,3,4,5}', true),
-        (v_dest_alfa, v_locale_id, '13:00:00', '13:30:00', '{1,2,3,4,5}', true),
-        (v_dest_beta, v_locale_id, '12:15:00', '12:45:00', '{1,2,3,4,5}', true),
-        (v_dest_beta, v_locale_id, '12:45:00', '13:15:00', '{1,2,3,4,5}', true),
-        (v_dest_beta, v_locale_id, '13:15:00', '13:45:00', '{1,2,3,4,5}', true)
+        ('f0000000-0000-0000-0000-000000000001', v_locale_id, v_dest_alfa, '12:00:00', '12:30:00', '{1,2,3,4,5}', true),
+        ('f0000000-0000-0000-0000-000000000002', v_locale_id, v_dest_alfa, '12:30:00', '13:00:00', '{1,2,3,4,5}', true),
+        ('f0000000-0000-0000-0000-000000000003', v_locale_id, v_dest_alfa, '13:00:00', '13:30:00', '{1,2,3,4,5}', true),
+        ('f0000000-0000-0000-0000-000000000004', v_locale_id, v_dest_beta, '12:15:00', '12:45:00', '{1,2,3,4,5}', true),
+        ('f0000000-0000-0000-0000-000000000005', v_locale_id, v_dest_beta, '12:45:00', '13:15:00', '{1,2,3,4,5}', true),
+        ('f0000000-0000-0000-0000-000000000006', v_locale_id, v_dest_beta, '13:15:00', '13:45:00', '{1,2,3,4,5}', true)
     ON CONFLICT (id) DO NOTHING;
 
-    -- 6. Categorie Menu (6)
+    -- 7. Categorie Menu (6)
     INSERT INTO categorie_menu (id, locale_id, nome, descrizione, ordine, visibile)
     VALUES
         (v_cat_antipasti, v_locale_id, 'Antipasti', 'Sfiziosità e taglieri preparati con prodotti freschi', 1, true),
@@ -92,7 +99,7 @@ BEGIN
         (v_cat_dolci, v_locale_id, 'Dolci Artigianali', 'Dessert fatti in casa ogni mattina', 6, true)
     ON CONFLICT (id) DO NOTHING;
 
-    -- 7. Prodotti (18 piatti con prezzi in centesimi)
+    -- 8. Prodotti (18 piatti con prezzi in centesimi)
     INSERT INTO prodotti (id, locale_id, categoria_id, nome, descrizione, prezzo, foto_url, allergeni, disponibile, in_evidenza, ordine)
     VALUES
         -- Antipasti
@@ -118,38 +125,38 @@ BEGIN
         ('p0000000-0000-0000-0000-000000000014', v_locale_id, v_cat_contorni, 'Bietole Saltate con Olio ed Aglio Dolce', 'Verdure a foglia verde saltate in padella', 400, '/demo/bietole.jpg', '{}', true, false, 3),
 
         -- Bevande
-        ('p0000000-0000-0000-0000-000000000015', v_locale_id, v_cat_bevande, 'Acqua Minerale 50cl', 'Naturale o Frizzante in bottiglia eco', 150, '/demo/acqua.jpg', '{}', true, false, 1),
-        ('p0000000-0000-0000-0000-000000000016', v_locale_id, v_cat_bevande, 'Limonata Biologica San Pellegrino 33cl', 'Bibita fresca agli agrumi italiani', 300, '/demo/bibita.jpg', '{}', true, false, 2),
-        ('p0000000-0000-0000-0000-000000000017', v_locale_id, v_cat_bevande, 'Birra Artigianale Bionda 33cl', 'Birra artigianale a bassa fermentazione, note fresche di malto', 450, '/demo/birra.jpg', '{1}', true, false, 3),
+        ('p0000000-0000-0000-0000-000000000015', v_locale_id, v_cat_bevande, 'Acqua Minerale 50cl', 'Naturale o Frizzante in bottiglia eco', 150, '/demo/acqua.webp', '{}', true, false, 1),
+        ('p0000000-0000-0000-0000-000000000016', v_locale_id, v_cat_bevande, 'Limonata Biologica San Pellegrino 33cl', 'Bibita fresca agli agrumi italiani', 300, '/demo/bibita.webp', '{}', true, false, 2),
+        ('p0000000-0000-0000-0000-000000000017', v_locale_id, v_cat_bevande, 'Birra Artigianale Bionda 33cl', 'Birra artigianale a bassa fermentazione, note fresche di malto', 450, '/demo/birra.webp', '{1}', true, false, 3),
 
         -- Dolci
         ('p0000000-0000-0000-0000-000000000018', v_locale_id, v_cat_dolci, 'Tiramisù Tradizionale al Mascarpone', 'Savoiardi artigianali bagnati nel caffè e crema al mascarpone', 500, '/demo/tiramisu.jpg', '{1,3,7}', true, true, 1)
     ON CONFLICT (id) DO NOTHING;
 
-    -- 8. Opzioni per le Tagliatelle
+    -- 9. Opzioni per le Tagliatelle
     INSERT INTO gruppi_opzioni (id, locale_id, prodotto_id, nome, obbligatorio, scelta_multipla, min_selezioni, max_selezioni, ordine)
     VALUES (v_grp_formato, v_locale_id, v_prod_tagliatelle, 'Porzione e aggiunte', false, false, 0, 1, 1)
     ON CONFLICT (id) DO NOTHING;
 
-    INSERT INTO opzioni (id, gruppo_id, locale_id, nome, prezzo_extra, disponibile, ordine)
+    INSERT INTO opzioni (id, locale_id, gruppo_id, nome, prezzo_extra, disponibile, ordine)
     VALUES
-        ('o0000000-0000-0000-0000-000000000001', v_grp_formato, v_locale_id, 'Porzione Normale', 0, true, 1),
-        ('o0000000-0000-0000-0000-000000000002', v_grp_formato, v_locale_id, 'Porzione Abbondante (+30%)', 200, true, 2)
+        ('o0000000-0000-0000-0000-000000000001', v_locale_id, v_grp_formato, 'Porzione Normale', 0, true, 1),
+        ('o0000000-0000-0000-0000-000000000002', v_locale_id, v_grp_formato, 'Porzione Abbondante (+30%)', 200, true, 2)
     ON CONFLICT (id) DO NOTHING;
 
-    -- 9. Menu Fisso "Menu Pranzo Lavoro" (13,00 € = 1300 centesimi)
+    -- 10. Menu Fisso "Menu Pranzo Business" (13,00 € = 1300 centesimi)
     INSERT INTO menu_fissi (id, locale_id, nome, descrizione, prezzo, attivo)
     VALUES (v_menu_fisso, v_locale_id, 'Menu Pranzo Business', 'Un primo + un contorno + acqua 50cl compresa nel prezzo', 1300, true)
     ON CONFLICT (id) DO NOTHING;
 
-    INSERT INTO menu_fissi_slot (id, menu_fisso_id, locale_id, nome, categoria_id, facoltativo, ordine)
+    INSERT INTO menu_fissi_slot (id, locale_id, menu_fisso_id, nome, categoria_id, facoltativo, ordine)
     VALUES
-        ('s0000000-0000-0000-0000-000000000001', v_menu_fisso, v_locale_id, 'Primo Piatto a scelta', v_cat_primi, false, 1),
-        ('s0000000-0000-0000-0000-000000000002', v_menu_fisso, v_locale_id, 'Contorno a scelta', v_cat_contorni, false, 2),
-        ('s0000000-0000-0000-0000-000000000003', v_menu_fisso, v_locale_id, 'Bevanda inclusa', v_cat_bevande, false, 3)
+        ('s0000000-0000-0000-0000-000000000001', v_locale_id, v_menu_fisso, 'Primo Piatto a scelta', v_cat_primi, false, 1),
+        ('s0000000-0000-0000-0000-000000000002', v_locale_id, v_menu_fisso, 'Contorno a scelta', v_cat_contorni, false, 2),
+        ('s0000000-0000-0000-0000-000000000003', v_locale_id, v_menu_fisso, 'Bevanda inclusa', v_cat_bevande, false, 3)
     ON CONFLICT (id) DO NOTHING;
 
-    -- 10. Piatto del Giorno
+    -- 11. Piatto del Giorno
     INSERT INTO piatti_del_giorno (id, locale_id, nome, descrizione, prezzo, foto_url, allergeni, giorni_disponibilita, attivo)
     VALUES (
         'd0000000-0000-0000-0000-000000000009',
@@ -157,28 +164,28 @@ BEGIN
         'Couscous Mediterraneo con Verdure Caramellate',
         'Specialità del giorno servita con ceci tostati e menta fresca',
         850, -- 8,50 €
-        '/demo/couscous.jpg',
+        '/demo/couscous.webp',
         '{1}',
         '{1,2,3,4,5}',
         true
     )
     ON CONFLICT (id) DO NOTHING;
 
-    -- 11. Generazione di 16 Ordini Demo fittizi (distribuiti per testare dashboard e filtri)
+    -- 12. Generazione di 16 Ordini Demo fittizi
     FOR i IN 1..16 LOOP
         v_ordine_id := gen_random_uuid();
 
         INSERT INTO ordini (
             id, locale_id, codice_ordine, tipo_servizio, stato, stato_pagamento, metodo_pagamento,
-            destinazione_snapshot, data_consegna, fascia_oraria,
+            destinazione_snapshot, data_consegna, fascia_oraria, indirizzo_consegna,
             nome_cliente, cognome_cliente, telefono_cliente, note_cliente,
-            totale, commissione_pagamento, created_at
+            totale, costo_consegna, commissione_pagamento, created_at
         )
         VALUES (
             v_ordine_id,
             v_locale_id,
             'ORD-DEMO-' || LPAD(i::text, 4, '0'),
-            'destinazione_programmata',
+            CASE WHEN i % 4 = 0 THEN 'domicilio' ELSE 'destinazione_programmata' END,
             CASE 
                 WHEN i <= 4 THEN 'in_attesa'
                 WHEN i <= 9 THEN 'confermato'
@@ -191,22 +198,27 @@ BEGIN
                 ELSE 'rimborsato'
             END,
             'contanti',
-            jsonb_build_object(
-                'nome', 'Sede Aziendale Nexus Tech',
-                'indirizzo', 'Via dell''Innovazione 12, Edificio B'
-            ),
+            CASE 
+                WHEN i % 4 = 0 THEN NULL
+                ELSE jsonb_build_object(
+                    'nome', 'Sede Aziendale Nexus Tech',
+                    'indirizzo', 'Via dell''Innovazione 12, Edificio B'
+                )
+            END,
             CURRENT_DATE + ((i % 3) || ' days')::interval,
             '12:30:00 - 13:00:00',
+            CASE WHEN i % 4 = 0 THEN 'Via Monte Rosa 24, Milano' ELSE NULL END,
             'ClienteDemo' || i,
             'Test',
             '+39 333 00000' || LPAD(i::text, 2, '0'),
             CASE WHEN i % 3 = 0 THEN 'Senza posate monouso per favore' ELSE NULL END,
             1350, -- 13,50 €
+            CASE WHEN i % 4 = 0 THEN 250 ELSE 0 END, -- 2,50 € consegna a domicilio
             0,
             NOW() - ((16 - i) || ' hours')::interval
         );
 
-        -- Riga ordine collegata
+        -- Righe ordine collegate
         INSERT INTO righe_ordine (
             ordine_id, locale_id, tipo, prodotto_id, nome_snapshot, prezzo_unitario_snapshot, quantita, totale_riga
         )
