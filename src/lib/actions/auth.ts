@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { percorsoSicuro } from '@/lib/auth-utils';
 
 /**
  * Login con email e password.
@@ -31,8 +32,9 @@ export async function loginAction(
     return { errore: `Errore di accesso: ${error.message}` };
   }
 
+  const destinazioneSicura = percorsoSicuro(redirectTo);
   revalidatePath('/', 'layout');
-  redirect(redirectTo || '/admin');
+  redirect(destinazioneSicura);
 }
 
 /**

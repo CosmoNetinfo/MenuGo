@@ -11,10 +11,16 @@ export const metadata = {
 export default async function SuperDashboardPage() {
   const supabase = createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) redirect('/super/login');
+  if (!user) redirect('/super/login');
+
+  // Verifica che l'utente sia super admin
+  const { data: isSuperAdmin } = await supabase
+    .rpc('is_super_admin', { check_user_id: user.id });
+
+  if (!isSuperAdmin) redirect('/admin');
 
   // Carica lista locali
   const { data: locali } = await supabase
@@ -38,7 +44,7 @@ export default async function SuperDashboardPage() {
           <h1 className="text-lg font-extrabold text-white">Super Amministratore</h1>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-400 hidden sm:block">{session.user.email}</span>
+          <span className="text-xs text-slate-400 hidden sm:block">{user.email}</span>
           <form action={logoutAction}>
             <button
               type="submit"

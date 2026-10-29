@@ -9,10 +9,11 @@ import { loginAction } from '@/lib/actions/auth';
 export default function AdminLoginPage() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect') || '/admin';
+  const erroreDaParam = searchParams.get('errore');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [errore, setErrore] = useState<string | null>(null);
+  const [errore, setErrore] = useState<string | null>(erroreDaParam);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent) {

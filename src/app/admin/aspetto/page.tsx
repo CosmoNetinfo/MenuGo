@@ -10,16 +10,16 @@ export const metadata = {
 export default async function AdminAspettoPage() {
   const supabase = createClient();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) redirect('/admin/login');
+  if (!user) redirect('/admin/login');
 
   // Recupera il locale dell'utente loggato
   const { data: utente, error } = await supabase
     .from('utenti_locale')
     .select('locale_id, locali(slug)')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .single();
 
   if (error || !utente) {
