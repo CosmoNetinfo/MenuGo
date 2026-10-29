@@ -71,15 +71,20 @@ export default async function AdminDashboardPage() {
             </p>
           </Link>
 
-          <div className="p-6 rounded-2xl bg-white border border-slate-200 opacity-60">
-            <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-lg mb-4">
+          <Link
+            href="/admin/menu"
+            className="p-6 rounded-2xl bg-white border-2 border-slate-200 hover:border-emerald-600 transition shadow-sm group"
+          >
+            <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg mb-4 group-hover:scale-105 transition">
               🍽️
             </div>
-            <h2 className="text-base font-bold text-slate-900">Menu &amp; Piatti</h2>
+            <h2 className="text-base font-bold text-slate-900 group-hover:text-emerald-700 transition">
+              Menu &amp; Piatti
+            </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Gestione categorie, varianti e allergeni (Fase 3).
+              Gestione categorie, varianti, menu fissi e piatti del giorno.
             </p>
-          </div>
+          </Link>
 
           <div className="p-6 rounded-2xl bg-white border border-slate-200 opacity-60">
             <div className="h-10 w-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center font-bold text-lg mb-4">

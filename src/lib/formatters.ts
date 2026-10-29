@@ -21,6 +21,8 @@ export function formatPrice(cents: number | null | undefined): string {
   }).format(euros);
 }
 
+export const formattaPrezzoEuro = formatPrice;
+
 export function formatDateItalian(dateInput: string | Date): string {
   const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
   if (isNaN(date.getTime())) return '';
@@ -69,3 +71,5 @@ export const ALLERGENI_UE: Record<number, Allergene> = {
   13: { numero: 13, nome: 'Lupini', icona: '🌿' },
   14: { numero: 14, nome: 'Molluschi', icona: '🦪' },
 };
+
+export const LISTA_ALLERGENI_UE: Allergene[] = Object.values(ALLERGENI_UE);

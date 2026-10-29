@@ -1,78 +1,91 @@
 import { notFound } from 'next/navigation';
-import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getFullLocaleBySlug } from '@/lib/queries/locale';
-import { formatPrice, formatTimeItalian, ALLERGENI_UE } from '@/lib/formatters';
 import { BRAND_CONFIG } from '@/config/brand';
+import { getGiornoSettimanaAttuale } from '@/lib/pricing';
+import type { Metadata } from 'next';
 
-interface Props {
-  params: { slug: string };
-}
-
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const data = await getFullLocaleBySlug(params.slug);
-  if (!data || data.locale.stato !== 'attivo') {
-    return {
-      title: 'Locale non trovato',
-    };
-  }
-
-  const { branding } = data;
-  return {
-    title: `${branding.nome} · Vetrina Menu`,
-    description: branding.slogan || `Consulta il menu e le specialità di ${branding.nome}`,
-    manifest: `/${params.slug}/manifest.webmanifest`,
+interface PageProps {
+  params: {
+    slug: string;
   };
 }
 
-export default async function LocaleShowcasePage({ params }: Props) {
+// 14 allergeni ufficiali UE (Regolamento UE 1169/2011)
+const ALLERGENI_UE: Record<number, { nome: string; icona: string }> = {
+  1: { nome: 'Glutine', icona: '🌾' },
+  2: { nome: 'Crostacei', icona: '🦐' },
+  3: { nome: 'Uova', icona: '🥚' },
+  4: { nome: 'Pesce', icona: '🐟' },
+  5: { nome: 'Arachidi', icona: '🥜' },
+  6: { nome: 'Soia', icona: '🌱' },
+  7: { nome: 'Latte e lattosio', icona: '🥛' },
+  8: { nome: 'Frutta a guscio', icona: '🌰' },
+  9: { nome: 'Sedano', icona: '🥬' },
+  10: { nome: 'Senape', icona: '🟡' },
+  11: { nome: 'Sesamo', icona: '⚪' },
+  12: { nome: 'Solfiti', icona: '🍷' },
+  13: { nome: 'Lupini', icona: '🌿' },
+  14: { nome: 'Molluschi', icona: '🦪' },
+};
+
+function formatPrice(cents: number): string {
+  const euro = (cents / 100).toFixed(2).replace('.', ',');
+  return `${euro} €`;
+}
+
+function formatTimeItalian(timeStr: string): string {
+  const parts = timeStr.split(':');
+  return `${parts[0]}:${parts[1]}`;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const data = await getFullLocaleBySlug(params.slug);
+  if (!data) return {};
+
+  const { branding, locale } = data;
+  return {
+    title: `${branding.nome} — Vetrina Online MenuGo`,
+    description: branding.slogan || `Consulta il menu e ordina online da ${branding.nome}.`,
+    manifest: `/${locale.slug}/manifest.webmanifest`,
+    icons: branding.logo_url ? [{ url: branding.logo_url }] : [],
+    themeColor: branding.colore_primario,
+  };
+}
+
+export default async function LocaleShowcasePage({ params }: PageProps) {
   const data = await getFullLocaleBySlug(params.slug);
 
   if (!data) {
     notFound();
   }
 
-  const { locale, branding, settings, categorie, destinazioni, zoneConsegna } = data;
+  const { branding, settings, categorie, menuFissi, piattiDelGiorno, destinazioni, zoneConsegna } = data;
 
-  // Se il locale è sospeso dal super admin, mostra schermata di cortesia
-  if (locale.stato === 'sospeso') {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-2xl font-bold mb-4">
-          ⚠️
-        </div>
-        <h1 className="text-2xl font-bold text-slate-800 mb-2">{branding.nome}</h1>
-        <p className="text-slate-600 max-w-md mb-6">
-          Servizio temporaneamente non disponibile. Ci scusiamo per il disagio.
-        </p>
-        <Link
-          href="/"
-          className="text-sm font-semibold text-emerald-600 hover:text-emerald-700"
-        >
-          ← Torna a {BRAND_CONFIG.name}
-        </Link>
-      </div>
-    );
-  }
-
-  // Variabili CSS dinamiche generate dai colori del locale
+  // Stile dinamico basato sui colori del locale
   const primaryColor = branding.colore_primario || '#059669';
   const accentColor = branding.colore_accento || '#ea580c';
   const primaryTextColor = branding.colore_testo_primario || '#ffffff';
 
+  // Piatto del giorno disponibile oggi
+  const giornoOggi = getGiornoSettimanaAttuale();
+  const piattiOggi = piattiDelGiorno.filter(
+    (p) => p.attivo && p.giorni_disponibilita.includes(giornoOggi)
+  );
+
   return (
     <div
-      className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans"
+      className="min-h-screen flex flex-col bg-slate-50 text-slate-800"
       style={
         {
-          '--primary': primaryColor,
-          '--accent': accentColor,
-          '--primary-text': primaryTextColor,
+          '--color-primary': primaryColor,
+          '--color-accent': accentColor,
+          '--color-primary-text': primaryTextColor,
         } as React.CSSProperties
       }
     >
-      {/* Top Banner / Navigation */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200">
+      {/* Header Vetrina */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {branding.logo_url ? (
@@ -80,19 +93,24 @@ export default async function LocaleShowcasePage({ params }: Props) {
               <img
                 src={branding.logo_url}
                 alt={branding.nome}
-                className="h-10 w-auto max-w-[140px] object-contain rounded"
+                className="h-10 w-10 rounded-full object-cover border border-slate-200"
               />
             ) : (
               <div
-                className="h-10 px-3 rounded-lg flex items-center justify-center font-bold text-lg shadow-sm"
+                className="h-10 w-10 rounded-full flex items-center justify-center font-bold text-lg shadow-xs"
                 style={{ backgroundColor: primaryColor, color: primaryTextColor }}
               >
-                {branding.nome.substring(0, 2).toUpperCase()}
+                {branding.nome.charAt(0).toUpperCase()}
               </div>
             )}
-            <span className="font-bold text-lg text-slate-900 hidden sm:inline">
-              {branding.nome}
-            </span>
+            <div className="leading-tight">
+              <span className="font-extrabold text-base sm:text-lg text-slate-900 block truncate max-w-[200px] sm:max-w-none">
+                {branding.nome}
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                Menu online su {BRAND_CONFIG.name}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -114,10 +132,10 @@ export default async function LocaleShowcasePage({ params }: Props) {
             )}
 
             <Link
-              href="/admin/aspetto"
+              href="/admin/menu"
               className="text-xs font-medium text-slate-500 hover:text-slate-800 ml-2 px-2.5 py-1 rounded border border-slate-200 bg-white"
             >
-              ⚙️ Gestore
+              ⚙️ Menu Gestore
             </Link>
           </div>
         </div>
@@ -186,11 +204,108 @@ export default async function LocaleShowcasePage({ params }: Props) {
         </div>
       </section>
 
-      {/* Main Content (Menu Categories & Dishes) */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8">
+      {/* Main Content */}
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-8 space-y-10">
+        {/* Sezione Fuori Menu / Piatti del Giorno */}
+        {piattiOggi.length > 0 && (
+          <section className="bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent p-5 rounded-3xl border border-amber-200">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">🌟</span>
+              <div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">
+                  Fuori Menu del Giorno
+                </h2>
+                <p className="text-xs text-slate-500">Specialità fresche disponibili solo oggi</p>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              {piattiOggi.map((pdg) => (
+                <div
+                  key={pdg.id}
+                  className="bg-white p-4 rounded-2xl border border-amber-200/80 shadow-xs flex justify-between gap-4"
+                >
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full inline-block mb-1">
+                      Oggi
+                    </span>
+                    <h3 className="font-bold text-slate-900 text-sm">{pdg.nome}</h3>
+                    {pdg.descrizione && (
+                      <p className="text-xs text-slate-500 mt-1">{pdg.descrizione}</p>
+                    )}
+                    <span className="text-sm font-extrabold text-slate-900 mt-2 block">
+                      {formatPrice(pdg.prezzo)}
+                    </span>
+                  </div>
+                  {pdg.foto_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={pdg.foto_url}
+                      alt={pdg.nome}
+                      className="w-20 h-20 rounded-xl object-cover"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Sezione Menu Fissi & Formule */}
+        {menuFissi.length > 0 && (
+          <section className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">⭐</span>
+              <div>
+                <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">
+                  Formule &amp; Menu Fissi
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Combinazioni complete a prezzo bloccato
+                </p>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              {menuFissi.map((mf) => (
+                <div
+                  key={mf.id}
+                  className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex justify-between items-start gap-2">
+                      <h3 className="font-bold text-slate-900 text-base">{mf.nome}</h3>
+                      <span className="text-base font-extrabold text-emerald-700">
+                        {formatPrice(mf.prezzo)}
+                      </span>
+                    </div>
+                    {mf.descrizione && (
+                      <p className="text-xs text-slate-500 mt-1">{mf.descrizione}</p>
+                    )}
+
+                    <div className="mt-3 pt-3 border-t border-slate-200 space-y-1 text-xs text-slate-600">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Include a scelta:
+                      </span>
+                      {mf.slots.map((s) => (
+                        <div key={s.id} className="flex items-center justify-between">
+                          <span>• {s.nome}</span>
+                          {s.facoltativo && (
+                            <span className="text-[10px] text-slate-400 italic">Opzionale</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Navigation Categories Pills */}
         {categorie.length > 0 && (
-          <nav className="sticky top-16 z-30 bg-slate-50/95 backdrop-blur py-3 -mx-4 px-4 mb-8 overflow-x-auto border-b border-slate-200 flex gap-2">
+          <nav className="sticky top-16 z-30 bg-slate-50/95 backdrop-blur py-3 -mx-4 px-4 overflow-x-auto border-b border-slate-200 flex gap-2">
             {categorie.map((cat) => (
               <a
                 key={cat.id}
@@ -207,7 +322,9 @@ export default async function LocaleShowcasePage({ params }: Props) {
         {categorie.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
             <span className="text-4xl block mb-2">🍽️</span>
-            <h2 className="text-lg font-semibold text-slate-800">Il menu è in fase di aggiornamento</h2>
+            <h2 className="text-lg font-semibold text-slate-800">
+              Il menu è in fase di aggiornamento
+            </h2>
             <p className="text-sm text-slate-500">I piatti del locale saranno presto visibili online.</p>
           </div>
         ) : (
@@ -283,6 +400,21 @@ export default async function LocaleShowcasePage({ params }: Props) {
                               })}
                             </div>
                           )}
+
+                          {/* Gruppi di opzioni/varianti disponibili */}
+                          {piatto.gruppiOpzioni && piatto.gruppiOpzioni.length > 0 && (
+                            <div className="mt-1 text-[11px] text-slate-400">
+                              Varianti:{' '}
+                              {piatto.gruppiOpzioni
+                                .map(
+                                  (g) =>
+                                    `${g.nome} (${g.opzioni
+                                      .map((o) => (o.prezzo_extra > 0 ? `${o.nome} +${formatPrice(o.prezzo_extra)}` : o.nome))
+                                      .join(', ')})`
+                                )
+                                .join(' · ')}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -331,7 +463,10 @@ export default async function LocaleShowcasePage({ params }: Props) {
                     {dest.indirizzo && <p className="text-slate-400">{dest.indirizzo}</p>}
                     {dest.fasce.length > 0 && (
                       <p className="text-emerald-700 mt-1 font-medium">
-                        Fasce: {dest.fasce.map((f) => `${formatTimeItalian(f.ora_inizio)}-${formatTimeItalian(f.ora_fine)}`).join(', ')}
+                        Fasce:{' '}
+                        {dest.fasce
+                          .map((f) => `${formatTimeItalian(f.ora_inizio)}-${formatTimeItalian(f.ora_fine)}`)
+                          .join(', ')}
                       </p>
                     )}
                   </li>
@@ -349,7 +484,9 @@ export default async function LocaleShowcasePage({ params }: Props) {
                 {zoneConsegna.map((zona) => (
                   <li key={zona.id} className="flex justify-between items-center py-1 border-b border-slate-100 last:border-none">
                     <span>{zona.nome}</span>
-                    <span className="font-semibold text-slate-800">{formatPrice(zona.costo)}</span>
+                    <span className="font-semibold text-slate-800">
+                      {zona.costo === 0 ? 'Gratis' : formatPrice(zona.costo)}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -358,40 +495,15 @@ export default async function LocaleShowcasePage({ params }: Props) {
         </section>
       </main>
 
-      {/* Footer Vetrina */}
-      <footer className="bg-white border-t border-slate-200 mt-16 py-10 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6 text-xs text-slate-500">
-          <div>
-            <p className="font-bold text-slate-800 text-sm">{branding.nome}</p>
-            {settings.indirizzo && <p>{settings.indirizzo}</p>}
-            {settings.testo_privacy && <p className="mt-2 text-slate-400 max-w-md">{settings.testo_privacy}</p>}
-          </div>
-
-          <div className="flex flex-col sm:items-end gap-2">
-            <div className="flex gap-4">
-              {settings.link_instagram && (
-                <a href={settings.link_instagram} target="_blank" rel="noopener noreferrer" className="hover:text-slate-800">
-                  Instagram
-                </a>
-              )}
-              {settings.link_facebook && (
-                <a href={settings.link_facebook} target="_blank" rel="noopener noreferrer" className="hover:text-slate-800">
-                  Facebook
-                </a>
-              )}
-              {settings.link_mappa && (
-                <a href={settings.link_mappa} target="_blank" rel="noopener noreferrer" className="hover:text-slate-800">
-                  Mappa
-                </a>
-              )}
-            </div>
-            <p className="text-slate-400">
-              Powered by{' '}
-              <Link href="/" className="font-semibold text-slate-700 hover:underline">
-                {BRAND_CONFIG.name}
-              </Link>
-            </p>
-          </div>
+      {/* Footer */}
+      <footer className="mt-auto border-t border-slate-200 bg-white py-8 text-center text-xs text-slate-500">
+        <div className="max-w-5xl mx-auto px-4 space-y-2">
+          <p>
+            © {new Date().getFullYear()} {branding.nome}. Tutti i diritti riservati.
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Piattaforma e tecnologia di {BRAND_CONFIG.name} · Ordini veloci senza registrazione
+          </p>
         </div>
       </footer>
     </div>

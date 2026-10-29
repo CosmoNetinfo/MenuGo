@@ -1,15 +1,29 @@
 import { createClient } from '@/lib/supabase/server';
 import type { Database } from '@/types/database';
 
+export type ProdottoConOpzioni = Database['public']['Tables']['prodotti']['Row'] & {
+  gruppiOpzioni: Array<
+    Database['public']['Tables']['gruppi_opzioni']['Row'] & {
+      opzioni: Database['public']['Tables']['opzioni']['Row'][];
+    }
+  >;
+};
+
+export type CategoriaConProdotti = Database['public']['Tables']['categorie_menu']['Row'] & {
+  prodotti: ProdottoConOpzioni[];
+};
+
+export type MenuFissoConSlot = Database['public']['Tables']['menu_fissi']['Row'] & {
+  slots: Database['public']['Tables']['menu_fissi_slot']['Row'][];
+};
+
 export type FullLocaleData = {
   locale: Database['public']['Tables']['locali']['Row'];
   branding: Database['public']['Tables']['locale_branding']['Row'];
   settings: Database['public']['Tables']['locale_settings']['Row'];
-  categorie: Array<
-    Database['public']['Tables']['categorie_menu']['Row'] & {
-      prodotti: Database['public']['Tables']['prodotti']['Row'][];
-    }
-  >;
+  categorie: CategoriaConProdotti[];
+  menuFissi: MenuFissoConSlot[];
+  piattiDelGiorno: Database['public']['Tables']['piatti_del_giorno']['Row'][];
   destinazioni: Array<
     Database['public']['Tables']['destinazioni']['Row'] & {
       fasce: Database['public']['Tables']['fasce_orarie']['Row'][];
@@ -18,8 +32,12 @@ export type FullLocaleData = {
   zoneConsegna: Database['public']['Tables']['zone_consegna']['Row'][];
 };
 
-export async function getFullLocaleBySlug(slug: string): Promise<FullLocaleData | null> {
+export async function getFullLocaleBySlug(
+  slug: string,
+  filtri?: { includeNascosti?: boolean }
+): Promise<FullLocaleData | null> {
   const supabase = createClient();
+  const includeNascosti = filtri?.includeNascosti ?? false;
 
   // 1. Trova il locale
   const { data: locale, error: errLocale } = await supabase
@@ -41,7 +59,6 @@ export async function getFullLocaleBySlug(slug: string): Promise<FullLocaleData 
     .eq('locale_id', localeId)
     .single();
 
-  // Fallback se il branding non è ancora presente
   const safeBranding: Database['public']['Tables']['locale_branding']['Row'] = branding || {
     id: '',
     locale_id: localeId,
@@ -89,27 +106,97 @@ export async function getFullLocaleBySlug(slug: string): Promise<FullLocaleData 
     updated_at: '',
   };
 
-  // 4. Carica Categorie e Prodotti ordinati
-  const { data: categorie } = await supabase
+  // 4. Carica Categorie
+  let queryCat = supabase
     .from('categorie_menu')
     .select('*')
     .eq('locale_id', localeId)
-    .eq('visibile', true)
     .order('ordine', { ascending: true });
 
-  const { data: prodotti } = await supabase
+  if (!includeNascosti) {
+    queryCat = queryCat.eq('visibile', true);
+  }
+  const { data: categorie } = await queryCat;
+
+  // 5. Carica Prodotti
+  let queryProd = supabase
     .from('prodotti')
     .select('*')
     .eq('locale_id', localeId)
-    .eq('disponibile', true)
     .order('ordine', { ascending: true });
 
-  const categorieConProdotti = (categorie || []).map((cat) => ({
-    ...cat,
-    prodotti: (prodotti || []).filter((p) => p.categoria_id === cat.id),
+  if (!includeNascosti) {
+    queryProd = queryProd.eq('disponibile', true);
+  }
+  const { data: prodotti } = await queryProd;
+
+  // 6. Carica Gruppi Opzioni e Opzioni per i prodotti
+  const { data: gruppiOpzioni } = await supabase
+    .from('gruppi_opzioni')
+    .select('*')
+    .eq('locale_id', localeId)
+    .order('ordine', { ascending: true });
+
+  let queryOpz = supabase
+    .from('opzioni')
+    .select('*')
+    .eq('locale_id', localeId)
+    .order('ordine', { ascending: true });
+
+  if (!includeNascosti) {
+    queryOpz = queryOpz.eq('disponibile', true);
+  }
+  const { data: opzioni } = await queryOpz;
+
+  const gruppiConOpzioni = (gruppiOpzioni || []).map((gruppo) => ({
+    ...gruppo,
+    opzioni: (opzioni || []).filter((o) => o.gruppo_id === gruppo.id),
   }));
 
-  // 5. Carica Destinazioni e Fasce
+  const prodottiConOpzioni: ProdottoConOpzioni[] = (prodotti || []).map((p) => ({
+    ...p,
+    gruppiOpzioni: gruppiConOpzioni.filter((g) => g.prodotto_id === p.id),
+  }));
+
+  const categorieConProdotti: CategoriaConProdotti[] = (categorie || []).map((cat) => ({
+    ...cat,
+    prodotti: prodottiConOpzioni.filter((p) => p.categoria_id === cat.id),
+  }));
+
+  // 7. Carica Menu Fissi e Slot
+  let queryMenuFissi = supabase
+    .from('menu_fissi')
+    .select('*')
+    .eq('locale_id', localeId);
+
+  if (!includeNascosti) {
+    queryMenuFissi = queryMenuFissi.eq('attivo', true);
+  }
+  const { data: menuFissi } = await queryMenuFissi;
+
+  const { data: slots } = await supabase
+    .from('menu_fissi_slot')
+    .select('*')
+    .eq('locale_id', localeId)
+    .order('ordine', { ascending: true });
+
+  const menuFissiConSlot: MenuFissoConSlot[] = (menuFissi || []).map((mf) => ({
+    ...mf,
+    slots: (slots || []).filter((s) => s.menu_fisso_id === mf.id),
+  }));
+
+  // 8. Carica Piatti del Giorno
+  let queryPiatti = supabase
+    .from('piatti_del_giorno')
+    .select('*')
+    .eq('locale_id', localeId);
+
+  if (!includeNascosti) {
+    queryPiatti = queryPiatti.eq('attivo', true);
+  }
+  const { data: piattiDelGiorno } = await queryPiatti;
+
+  // 9. Carica Destinazioni e Fasce
   const { data: destinazioni } = await supabase
     .from('destinazioni')
     .select('*')
@@ -128,7 +215,7 @@ export async function getFullLocaleBySlug(slug: string): Promise<FullLocaleData 
     fasce: (fasce || []).filter((f) => f.destinazione_id === dest.id),
   }));
 
-  // 6. Zone di consegna
+  // 10. Zone di consegna
   const { data: zoneConsegna } = await supabase
     .from('zone_consegna')
     .select('*')
@@ -141,6 +228,8 @@ export async function getFullLocaleBySlug(slug: string): Promise<FullLocaleData 
     branding: safeBranding,
     settings: safeSettings,
     categorie: categorieConProdotti,
+    menuFissi: menuFissiConSlot,
+    piattiDelGiorno: piattiDelGiorno || [],
     destinazioni: destinazioniConFasce,
     zoneConsegna: zoneConsegna || [],
   };
