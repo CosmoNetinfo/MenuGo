@@ -2,6 +2,8 @@
  * Tipi base dell'applicazione MenuGo
  */
 
+export * from './database';
+
 export type LocaleId = string;
 
 export interface BrandConfig {
@@ -12,3 +14,4 @@ export interface BrandConfig {
   currency: string;
   timeZone: string;
 }
+
