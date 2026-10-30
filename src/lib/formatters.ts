@@ -22,6 +22,7 @@ export function formatPrice(cents: number | null | undefined): string {
 }
 
 export const formattaPrezzoEuro = formatPrice;
+export const formattaPrezzo = formatPrice;
 
 export function formatDateItalian(dateInput: string | Date): string {
   const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;

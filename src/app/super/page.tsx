@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { BRAND_CONFIG } from '@/config/brand';
 import { logoutAction } from '@/lib/actions/auth';
+import SuperDashboardClient, { type SuperLocaleItem } from './SuperDashboardClient';
 
 export const metadata = {
   title: 'Pannello Super Amministratore — MenuGo',
@@ -17,29 +18,80 @@ export default async function SuperDashboardPage() {
   if (!user) redirect('/super/login');
 
   // Verifica che l'utente sia super admin
-  const { data: isSuperAdmin } = await supabase
-    .rpc('is_super_admin', { check_user_id: user.id });
+  const { data: isSuperAdmin } = await supabase.rpc('is_super_admin', {
+    check_user_id: user.id,
+  });
 
   if (!isSuperAdmin) redirect('/admin');
 
-  // Carica lista locali
-  const { data: locali } = await supabase
+  const adminClient = createAdminClient();
+
+  // Carica lista locali con branding
+  const { data: locali } = await adminClient
     .from('locali')
-    .select('id, slug, stato, piano')
+    .select('id, slug, stato, piano, created_at, locale_branding(nome)')
     .order('created_at', { ascending: false });
 
-  // Carica lista gestori (utenti_locale + auth info non disponibile lato client)
-  const { data: gestori } = await supabase
+  // Carica ordini per aggregare statistiche (conteggio e fatturato)
+  const { data: ordini } = await adminClient
+    .from('ordini')
+    .select('locale_id, totale_centesimi, stato');
+
+  // Carica lista utenti_locale
+  const { data: utentiLocale } = await adminClient
     .from('utenti_locale')
-    .select('user_id, locale_id, ruolo, locali(slug)');
+    .select('locale_id, user_id, ruolo');
+
+  // Carica lista utenti auth
+  const { data: authUsers } = await adminClient.auth.admin.listUsers();
+  const emailMap = new Map<string, string>();
+  if (authUsers?.users) {
+    for (const u of authUsers.users) {
+      if (u.email) emailMap.set(u.id, u.email);
+    }
+  }
+
+  // Costruisci gli item arricchiti
+  const localiItems: SuperLocaleItem[] = (locali || []).map((loc) => {
+    const branding = Array.isArray(loc.locale_branding)
+      ? loc.locale_branding[0]
+      : loc.locale_branding;
+
+    const ordiniDelLocale = (ordini || []).filter((o) => o.locale_id === loc.id);
+    const ordiniCount = ordiniDelLocale.length;
+    // Solo gli ordini non annullati contano nel fatturato
+    const fatturatoTotale = ordiniDelLocale
+      .filter((o) => o.stato !== 'annullato')
+      .reduce((acc, o) => acc + (o.totale_centesimi || 0), 0);
+
+    const gestoriIds = (utentiLocale || [])
+      .filter((ul) => ul.locale_id === loc.id)
+      .map((ul) => ul.user_id);
+
+    const gestoriEmails = gestoriIds
+      .map((id) => emailMap.get(id))
+      .filter((email): email is string => Boolean(email));
+
+    return {
+      id: loc.id,
+      slug: loc.slug,
+      stato: loc.stato as 'attivo' | 'sospeso',
+      piano: loc.piano,
+      created_at: loc.created_at,
+      branding: branding ? { nome: branding.nome } : null,
+      ordiniCount,
+      fatturatoTotale,
+      gestori: gestoriEmails,
+    };
+  });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-8 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-950 text-white pb-12">
+      {/* Header Super Admin */}
+      <header className="bg-slate-900 border-b border-slate-800 px-4 sm:px-8 py-4 flex items-center justify-between sticky top-0 z-30">
         <div>
           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            {BRAND_CONFIG.name}
+            {BRAND_CONFIG.name} · Piattaforma Multi-Tenant
           </span>
           <h1 className="text-lg font-extrabold text-white">Super Amministratore</h1>
         </div>
@@ -48,7 +100,7 @@ export default async function SuperDashboardPage() {
           <form action={logoutAction}>
             <button
               type="submit"
-              className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-semibold text-white transition"
+              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition border border-slate-700"
             >
               Esci
             </button>
@@ -56,73 +108,8 @@ export default async function SuperDashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto p-4 sm:p-8 space-y-8">
-        {/* Riepilogo */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800">
-            <p className="text-3xl font-extrabold text-emerald-400">{locali?.length ?? 0}</p>
-            <p className="text-xs text-slate-400 mt-1">Locali totali</p>
-          </div>
-          <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800">
-            <p className="text-3xl font-extrabold text-sky-400">
-              {locali?.filter((l) => l.stato === 'attivo').length ?? 0}
-            </p>
-            <p className="text-xs text-slate-400 mt-1">Attivi</p>
-          </div>
-          <div className="bg-slate-900 rounded-2xl p-5 border border-slate-800">
-            <p className="text-3xl font-extrabold text-amber-400">{gestori?.length ?? 0}</p>
-            <p className="text-xs text-slate-400 mt-1">Gestori</p>
-          </div>
-        </div>
-
-        {/* Tabella locali */}
-        <section>
-          <h2 className="text-sm font-bold text-slate-300 uppercase tracking-widest mb-3">
-            Locali registrati
-          </h2>
-          <div className="overflow-x-auto rounded-2xl border border-slate-800">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-800 text-slate-400 text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="px-4 py-3 text-left">Slug</th>
-                  <th className="px-4 py-3 text-left">Stato</th>
-                  <th className="px-4 py-3 text-left">Piano</th>
-                  <th className="px-4 py-3 text-left">Azioni</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {(locali ?? []).map((locale) => (
-                  <tr key={locale.id} className="bg-slate-900 hover:bg-slate-800 transition">
-                    <td className="px-4 py-3 font-mono text-slate-200">{locale.slug}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          locale.stato === 'attivo'
-                            ? 'bg-emerald-900 text-emerald-300'
-                            : locale.stato === 'sospeso'
-                            ? 'bg-red-900 text-red-300'
-                            : 'bg-slate-700 text-slate-400'
-                        }`}
-                      >
-                        {locale.stato}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-300">{locale.piano}</td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/${locale.slug}`}
-                        target="_blank"
-                        className="text-xs text-sky-400 hover:text-sky-300 transition"
-                      >
-                        Vetrina →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      <main className="max-w-6xl mx-auto p-4 sm:p-8">
+        <SuperDashboardClient initialLocali={localiItems} />
       </main>
     </div>
   );
